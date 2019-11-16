@@ -4,17 +4,49 @@ problem that I still haven't fixed 3 hours later:
 
 What on Earth are the Linux interrupt numbers for the PL-to-PS interrupts??
 
-This file will explain how I tracked them down.
+================
+THE FINAL RESULT
+================
 
-Basically, the first 600 lines of this file are the different things I tried. 
-Zoom right down to "THE FINAL RESULT" to see the proper way to get irq numbers. 
-I'm leaving everything else here because eventually I want to fully explain the 
-final result and I'll need to reference it.
+At some point I'm gonna do this is in a nice write-up. For now, here is the code:
 
+    struct device_node *dn;
+    struct irq_domain *dom;
+    struct irq_fwspec dummy_fwspec = {
+        .param_count = 3,
+        .param = {0, 89, 4} //change 89 to number for your device
+    };
+    int virq;
+    
+    //Find the Linux irq number
+    dn = of_find_node_by_name(NULL, "interrupt-controller");
+    if (!dn) {
+        printk(KERN_ERR "Could not find device node for \"interrupt-controller\"\n");
+        goto /*error_handler*/;
+    }
+    dom = irq_find_host(dn);
+    if (!dom) {
+        printk(KERN_ERR "Could not find irq domain\n");
+        goto /*error_handler*/;
+    }
+    
+    dummy_fwspec.fwnode = dom->fwnode;
+    virq = irq_create_fwspec_mapping(&dummy_fwspec);
 
-=======================
-METHOD 1: IRQDOMAIN API
-=======================
+The idea is that we want to call irq_create_fwspec_mapping with all the 
+information it would need to create the irq mapping. For this reason, we get 
+the fwnode field of the irq_domain object for the system's interrupt 
+controller.
+
+********************************************************************************
+
+The next ~600 lines explains the long journey I went through to get to this 
+answer. At some point I'll condense this so that it properly explains the above 
+code.
+
+========================
+ATTEMPT 1: IRQDOMAIN API
+========================
 
 This morning I had the idea to search "linux find irq number from hardware 
 irq". It turned up this post:
@@ -606,38 +638,3 @@ the comments in the kernel are saying "don't do it" but I want to try it
 anyway. After all, there is only one interrupt controller...
 
 Nope, doesn't work. You have to do it the hard way.
-
-
-================
-THE FINAL RESULT
-================
-
-Actually, I'm gonna do this is in a nice write-up. For now, here is the code:
-
-    struct device_node *dn;
-    struct irq_domain *dom;
-    struct irq_fwspec dummy_fwspec = {
-        .param_count = 3,
-        .param = {0, 89, 4} //change 89 to number for your device
-    };
-    int virq;
-    
-    //Find the Linux irq number
-    dn = of_find_node_by_name(NULL, "interrupt-controller");
-    if (!dn) {
-        printk(KERN_ERR "Could not find device node for \"interrupt-controller\"\n");
-        goto /*error_handler*/;
-    }
-    dom = irq_find_host(dn);
-    if (!dom) {
-        printk(KERN_ERR "Could not find irq domain\n");
-        goto /*error_handler*/;
-    }
-    
-    dummy_fwspec.fwnode = dom->fwnode;
-    virq = irq_create_fwspec_mapping(&dummy_fwspec);
-
-The idea is that we want to call irq_create_fwspec_mapping with all the 
-information it would need to create the irq mapping. For this reason, we get 
-the fwnode field of the irq_domain object for the system's interrupt 
-controller.

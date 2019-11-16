@@ -1,0 +1,4 @@
+This repo contains info on writing UIO drivers for the MPSoC.
+
+writing_uio_drivers.txt explains most of how everything is done.
+
